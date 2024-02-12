@@ -27,7 +27,7 @@
 # instead of detecting the latest released one from tektoncd/pipeline releases
 RELEASE_YAML=${RELEASE_YAML:-}
 
-source $(dirname $0)/../vendor/github.com/tektoncd/plumbing/scripts/e2e-tests.sh
+# source $(dirname $0)/../vendor/github.com/tektoncd/plumbing/scripts/e2e-tests.sh
 
 function install_tkn() {
   echo ">> Installing tkn"
@@ -72,6 +72,7 @@ function chains_patch_spire() {
     --patch-file "$(dirname $0)/testdata/chains-patch-spire.json"
   # Wait for pods to be running in the namespaces we are deploying to
   wait_until_pods_running ${namespace} || fail_test "Tekton Chains did not come up after patching"
+  sleep 2m
 }
 
 function dump_logs() {
@@ -101,6 +102,7 @@ function install_spire() {
   kubectl create ns spire --dry-run=client -o yaml | kubectl apply -f -
   kubectl -n spire apply -f "$(dirname $0)/testdata/spire.yaml"
   wait_until_pods_running spire || fail_test "Spire did not come up"
+  sleep 2m
   spire_apply \
     -spiffeID spiffe://example.org/ns/spire/node/example \
     -selector k8s_psat:cluster:example \
@@ -127,6 +129,7 @@ function install_vault() {
   kubectl create ns vault --dry-run=client -o yaml | kubectl apply -f -
   kubectl -n vault apply -f "$(dirname $0)/testdata/vault.yaml"
   wait_until_pods_running vault || fail_test "Vault did not come up"
+  sleep 2m
   ROOT_TOKEN=token12345
   vault_exec secrets list 2>&1 | grep "^transit/" \
     || vault_exec secrets enable transit

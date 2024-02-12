@@ -132,10 +132,11 @@ spec:
       terminationGracePeriodSeconds: 10
       serviceAccountName: vault
       securityContext:
-        runAsNonRoot: true
-        runAsGroup: 1000
-        runAsUser: 100
-        fsGroup: 1000
+        # runAsNonRoot: true
+        # runAsGroup: 1000
+        # runAsUser: 100
+        # fsGroup: 1000
+        {}
       containers:
         - name: vault
           image: hashicorp/vault:1.9.2

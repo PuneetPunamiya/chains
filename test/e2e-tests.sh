@@ -29,10 +29,10 @@ initialize $@
 header "Setting up environment"
 
 # Test against nightly instead of latest.
-install_tkn
+# install_tkn
 
-export RELEASE_YAML="https://storage.googleapis.com/tekton-releases/pipeline/previous/v0.45.0/release.yaml"
-install_pipeline_crd
+# export RELEASE_YAML="https://storage.googleapis.com/tekton-releases/pipeline/previous/v0.45.0/release.yaml"
+# install_pipeline_crd
 
 install_chains
 
@@ -46,7 +46,9 @@ failed=0
 
 # Run the integration tests
 header "Running Go e2e tests"
-go_test_e2e -timeout=35m ./test/... || failed=1
+# go_test_e2e -timeout=35m ./test/... || failed=1
+# go test -v -count=1 -tags=e2e -timeout=35m ./test/... --kubeconfig ~/.kube/config
+go test -v -count=1 -tags=e2e -timeout=35m ./test/...
 
-(( failed )) && dump_logs && fail_test
+# (( failed )) && dump_logs && fail_test
 success

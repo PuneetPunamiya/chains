@@ -366,8 +366,8 @@ spec:
         app.kubernetes.io/name: spire
         app.kubernetes.io/instance: spire
     spec:
-      hostPID: true
-      hostNetwork: true
+      # hostPID: true
+      # hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
       serviceAccountName: spire-agent
       securityContext:
@@ -467,7 +467,7 @@ spec:
       containers:
         - name: spire-server
           securityContext:
-            {}
+           {}
           image: gcr.io/spiffe-io/spire-server:1.0.2
           imagePullPolicy: IfNotPresent
           args:
@@ -482,9 +482,9 @@ spec:
               mountPath: /run/spire/config
               readOnly: true
             # Spire is not configured with persistent data for CI tests
-            # - name: spire-data
-            #   mountPath: /run/spire/data
-            #   readOnly: false
+            - name: spire-data
+              mountPath: /run/spire/data
+              readOnly: false
             - name: spire-server-socket
               mountPath: /tmp/spire-server/private
               readOnly: false
@@ -540,6 +540,9 @@ spec:
         - name: spire-oidc-config
           configMap:
             name: spire-oidc-dp
+        - name: spire-data
+          emptyDir: {}
+
   # volumeClaimTemplates:
   #   - metadata:
   #       name: spire-data
