@@ -126,6 +126,20 @@ func (o *ObjectSigner) Sign(ctx context.Context, tektonObj objects.TektonObject)
 	}
 
 	signers := allSigners(ctx, o.SecretPath, cfg)
+	// watchSingers(signers)
+	var watcherStop = make(chan bool)
+
+	select {
+	case watcherStop <- true:
+		logger.Info("sent close event to WatchSigners()...")
+	default:
+		logger.Info("could not send close event to WatchSigners()...")
+	}
+
+	if err := kms.WatchSigners(ctx, watcherStop, signers, cfg); err != nil {
+		logger.Error(err)
+		return err
+	}
 
 	var merr *multierror.Error
 	extraAnnotations := map[string]string{}

@@ -17,6 +17,7 @@ package kms
 import (
 	"context"
 	"crypto"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -118,10 +119,10 @@ func NewSigner(ctx context.Context, cfg config.KMSSigner) (*Signer, error) {
 			return nil, err
 		}
 		rpcAuth.Token = rpcAuthToken
-		_, err = watchSigner(ctx, cfg)
-		if err != nil {
-			return nil, err
-		}
+		// _, err = watchSigner(ctx, cfg)
+		// if err != nil {
+		// 	return nil, err
+		// }
 	} else {
 		rpcAuth.Token = cfg.Auth.Token
 	}
@@ -146,10 +147,10 @@ func NewSigner(ctx context.Context, cfg config.KMSSigner) (*Signer, error) {
 }
 
 // ErrNothingToWatch is an error that's returned when the signers do not have anything to "watch"
-var ErrNothingToWatch = fmt.Errorf("signer has nothing to watch")
+var ErrNothingToWatch = fmt.Errorf("fsnotifier signer has nothing to watch as token-dir is not set")
 
 // WatchSigner returns a channel that receives a new signer each time it needs to be updated
-func watchSigner(ctx context.Context, cfg config.KMSSigner) (chan *Signer, error) {
+func WatchSigner(ctx context.Context, cfg config.KMSSigner, watcherStop chan bool) (chan *Signer, error) {
 	logger := logging.FromContext(ctx)
 
 	// Set up watcher only when `signers.kms.auth.token-dir` is set
@@ -171,7 +172,7 @@ func watchSigner(ctx context.Context, cfg config.KMSSigner) (chan *Signer, error
 		filepath.Join(cfg.Auth.TokenDir, "..data"),
 	}
 
-	singerChan := make(chan *Signer)
+	signerChan := make(chan *Signer)
 	// Start listening for events.
 	go func() {
 		for {
@@ -193,7 +194,7 @@ func watchSigner(ctx context.Context, cfg config.KMSSigner) (chan *Signer, error
 				updatedEnv, err := getRPCAuthToken(cfg.Auth.TokenDir)
 				if err != nil {
 					logger.Error(err)
-					singerChan <- nil
+					signerChan <- nil
 				}
 				if updatedEnv != os.Getenv("VAULT_TOKEN") {
 					logger.Infof("directory %s has been updated, reconfiguring rpcAuthToken...", cfg.Auth.TokenDir)
@@ -202,10 +203,10 @@ func watchSigner(ctx context.Context, cfg config.KMSSigner) (chan *Signer, error
 					newSigner, err := NewSigner(ctx, cfg)
 					if err != nil {
 						logger.Error(err)
-						singerChan <- nil
+						signerChan <- nil
 					} else {
 						// Storing the backend in the signer so everyone has access to the up-to-date backend
-						singerChan <- newSigner
+						signerChan <- newSigner
 					}
 				} else {
 					logger.Infof("VAULT_TOKEN has not changed in path: %s, signer auth will not be reconfigured", cfg.Auth.TokenDir)
@@ -216,6 +217,9 @@ func watchSigner(ctx context.Context, cfg config.KMSSigner) (chan *Signer, error
 					return
 				}
 				logger.Error(err)
+			case <-watcherStop:
+				logger.Info("stopping fsnotify context...")
+				return
 			}
 		}
 	}()
@@ -225,7 +229,8 @@ func watchSigner(ctx context.Context, cfg config.KMSSigner) (chan *Signer, error
 	if err != nil {
 		return nil, err
 	}
-	return singerChan, nil
+
+	return signerChan, nil
 }
 
 // getVaultToken retreives token from the given mount path
@@ -289,4 +294,48 @@ func (s *Signer) Cert() string {
 // Chain there is no chain, return nothing
 func (s *Signer) Chain() string {
 	return ""
+}
+
+func WatchSigners(ctx context.Context, watcherStop chan bool, signers map[string]signing.Signer, cfg config.Config) error {
+	logger := logging.FromContext(ctx)
+	for signer := range signers {
+		switch signer {
+		case signing.TypeKMS:
+			kmsWatcherStop := make(chan bool)
+			kmsChan, err := WatchSigner(ctx, cfg.Signers.KMS, kmsWatcherStop)
+			if err != nil {
+				if errors.Is(err, ErrNothingToWatch) {
+					logger.Info(err)
+					continue
+				}
+				return err
+			}
+			go func() {
+				for {
+					select {
+					case newSigner := <-kmsChan:
+						if newSigner == nil {
+							logger.Errorf("removing signer %s from signers", signing.TypeKMS)
+							delete(signers, signing.TypeKMS)
+							continue
+						}
+						logger.Infof("adding kms signer to signers: %s", signing.TypeKMS)
+						signers[signing.TypeKMS] = newSigner
+					case <-watcherStop:
+						select {
+						// stop the kmsWatcher first
+						case kmsWatcherStop <- true:
+							logger.Info("sent close events to WatchSigner()")
+						default:
+							logger.Info("could not send close event to WatchSigner()")
+						}
+					}
+				}
+			}()
+		default:
+			logger.Debugf("no kms Signers to watch...")
+		}
+	}
+
+	return nil
 }
