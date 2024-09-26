@@ -50,12 +50,12 @@ jobs:
         yq --version
 
     - name: Set the crc config
-      env:
-         PULL_SECRET_CONTENT: ${{ secrets.CRC_TOKEN }}
+      # env:
+      #    PULL_SECRET_CONTENT: ${{ secrets.CRC_TOKEN }}
       run: |
-        crc config set preset microshift
-        echo "$PULL_SECRET_CONTENT" > pull-secret
-        crc config set pull-secret-file pull-secret
+        crc config set preset okd
+        # echo "$PULL_SECRET_CONTENT" > pull-secret
+        # crc config set pull-secret-file pull-secret
         crc config set network-mode user
         crc config set memory 14000
     - name: Setup the crc
